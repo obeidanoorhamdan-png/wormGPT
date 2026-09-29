@@ -2,22 +2,20 @@ import os
 from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 from g4f.client import Client
+import g4f
 
 app = FastAPI(
     title="WORM Universal AI Gateway",
-    version="2.0",
-    description="بوابة ذكاء اصطناعي موحدة ومجانية بدون قيود"
+    version="2.1",
+    description="بوابة ذكاء اصطناعي موحدة بدون قيود"
 )
 
-# جلب مفتاح الحماية من متغيرات البيئة في Railway (الافتراضي للاختبار)
-WORM_API_KEY = os.getenv("WORM_API_KEY", "123123")
-
-# تهيئة عميل المزودين المجانيين
+WORM_API_KEY = os.getenv("WORM_API_KEY", "worm_secret_key_9999")
 client = Client()
 
 class ChatRequest(BaseModel):
     prompt: str
-    model: str = "gpt-4o"  # يمكنك تغيير النموذج الافتراضي أو إرساله من الواجهة
+    model: str = "gpt-3.5-turbo"  # استخدام نموذج افتراضي خفيف ومقبول مجاناً
     max_tokens: int = 1024
     temperature: float = 0.7
 
@@ -31,12 +29,12 @@ def verify_api_key(authorization: str = Header(None)):
 
 @app.get("/")
 def home():
-    return {"status": "online", "message": "WORM Universal Gateway is running successfully!"}
+    return {"status": "online", "message": "WORM Universal Gateway is running perfectly!"}
 
 @app.post("/v1/chat")
 def chat_endpoint(request: ChatRequest, token: str = Depends(verify_api_key)):
     try:
-        # إرسال الطلب عبر المزودين المتاحين بدون قيود
+        # محاولة الاتصال عبر السماح لـ g4f باختيار مزود حر تلقائياً
         response = client.chat.completions.create(
             model=request.model,
             messages=[{"role": "user", "content": request.prompt}],
@@ -51,5 +49,17 @@ def chat_endpoint(request: ChatRequest, token: str = Depends(verify_api_key)):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في الاتصال بالمزود: {str(e)}")
-      
+        # خطة بديلة: استخدام دالة g4f مباشرة مع مزود عشوائي حر إن فشل العميل
+        try:
+            fallback_response = g4f.ChatCompletion.create(
+                model=g4f.models.default,
+                messages=[{"role": "user", "content": request.prompt}],
+                stream=False,
+            )
+            return {
+                "status": "success",
+                "model_used": "fallback-free",
+                "response": fallback_response
+            }
+        except Exception as fallback_err:
+            raise HTTPException(status_code=500, detail=f"فشل الاتصال بجميع المزودين: {str(e)} | الخطأ البديل: {str(fallback_err)}")
